@@ -1,381 +1,340 @@
-# Day 1 · 加速版工程基础行动计划 Implementation Plan
+# Day 1｜把工程操作系统装起来
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> 今天的身份不是“学 GRPO 的学生”，而是第一次把一个真实研究仓库变成自己能安全操作的工程环境的人。
+>
+> **执行规则：下面所有终端命令都由我亲手运行；Codex 只解释、检查输出、帮助定位问题。**
 
-**Goal:** 在不把时间全扑到 Git 上的前提下，建立可控的项目环境，亲眼跑过一次最小 GRPO 训练链路，并能说清一条数据从 GSM8K 题目走到参数更新的大方向。
+## 1. 今天和大目标的关系
 
-**Architecture:** 今天不修改训练代码，也不追求训练效果。先把 Git 当作安全护栏，再让 `uv`、PyTRIO、最小 smoke test 和顶层数据流共同组成一次真实工程闭环；所有结论都记录为可复查的证据。
+我的长期主线是：
 
-**Tech Stack:** PowerShell、Git、uv、Python 3.13、PyTRIO、GSM8K、SwanLab（本日关闭）。
+```text
+Data → Eval → Agent trajectory → 实验闭环 → Post-training / Agentic RL
+```
+
+今天不直接推进算法知识，而是先补上这条主线的“工程操作系统”：我必须能确认代码来自哪里、当前改动在哪里、如何隔离实验、如何创建可复现环境、以及如何留下可审查的记录。
+
+这不是绕路。以后做一次数据清洗、改一次 grader、跑一次 GRPO 实验，都需要同一套能力。
+
+## 2. 今日完成定义（Definition of Done）
+
+完成 Day 1 时，我应当拥有：
+
+- [ ] 一个干净的个人 fork 工作流：`origin` 指向我的 fork，`upstream` 指向原作者仓库。
+- [ ] 一个独立学习分支：`sprint/week1-foundation`。
+- [ ] 一个由 `uv` 管理、可以导入项目关键依赖的本地环境。
+- [ ] 这份包含真实执行记录的日志。
+- [ ] 至少一次亲眼看过的 `git diff`、`git diff --staged` 和本地 commit。
+- [ ] 能用自己的话解释：working tree、staging area、commit 分别是什么。
+
+今天**不做**：跑完整训练、阅读 GRPO 源码、申请 API key、修改 `pyproject.toml`、`uv.lock` 或业务代码、推送远端。
+
+建议时间：约 2.5～3 小时。若 `uv sync` 下载较久，可以暂停等待，但不要在等待时开新教程或改项目配置。
 
 ---
 
-## 今天的北极星
+## 3. 开始前：先恢复到干净起点（约 15 分钟）
 
-你长期要走的是：
+此前我们误操作留下过一个练习分支、一个 `upstream` remote 和一个未完成的 `.venv`。这段恢复练习本身很有价值：先观察状态，再只撤销自己确实想撤销的东西。
 
-```text
-Data Pipeline → LLM / Agent Eval → Failure Analysis
-→ 数据 / Prompt / Reward 改造 → 实验验证 → Post-training / Agentic RL
+### 3.1 先观察，不修改
+
+在仓库根目录 `D:\agentic-rl-lab` 运行：
+
+```powershell
+git status --short --branch
+git branch --show-current
+git remote -v
+Test-Path -LiteralPath .venv
 ```
 
-今天只搭这条路的第一块地基：**我能安全地拿到一个陌生训练仓库，建好环境，跑一次最小实验，并追到它的数据主线。**
+当前这次恢复的目标状态是：
 
-这不是“学会 GRPO”的一天，也不是“把 Git 背下来”的一天。
+```text
+当前分支：main
+remote：只剩 origin（walchwil/agentic-rl-lab）
+.venv：False
+Git 工作区：没有文件改动
+```
 
-## 今日时间预算：约 7 小时
+如果已经符合目标，跳到第 4 节；不要为了“练习”重复删除。
 
-| 时段 | 时长 | 产出 |
-| --- | ---: | --- |
-| 0. 工作区护栏 | 25 分钟 | 当前分支、Git 状态与今天的边界清楚 |
-| 1. 环境建立 | 80 分钟 | `uv sync` 成功，或一份可定位的失败记录 |
-| 2. 远程训练预检 | 30 分钟 | PyTRIO 登录状态明确，不泄露任何凭据 |
-| 3. 最小 GRPO 试跑 | 90 分钟 | 一次 smoke test 的终端证据，或精确故障定位 |
-| 4. 追顶层数据流 | 95 分钟 | 一张属于你的 GRPO 数据流图 |
-| 5. 读入口与复盘 | 50 分钟 | 说清脚本怎样启动、哪些函数负责什么 |
-| 6. 检查与提交 | 30 分钟 | 只提交本笔记，能看懂 Git 树变化 |
+### 3.2 仅在仍看到旧练习状态时恢复
 
-Git 相关时间约 55 分钟；其余时间全部服务于真实训练实验和代码阅读。
+1. 切回主分支：
 
-## 今日禁止事项
+   ```powershell
+   git switch main
+   ```
 
-- [ ] 不修改 `01-grpo/` 的训练代码。
-- [ ] 不碰 `02-demo-async.py`；仓库快速指南已说明它仍有旧版 PyTRIO timeout 配置问题。
-- [ ] 不为了“跑通”而随手改依赖版本、复制 API Key，或让 AI 整仓修复。
-- [ ] 不开启 SwanLab online；今天用 `--swanlab-mode disabled`，先控制变量。
-- [ ] 不用 `git add .`；今天的提交只能包含 `notes/day1.md`。
+   `git checkout main` 在“切换分支”这个场景效果相同；这里用 `switch` 是为了让命令的职责更清晰。
+
+2. 删除这次误创建、且尚未承载任何工作的分支：
+
+   ```powershell
+   git branch -d codex/sprint-week1-foundation
+   ```
+
+   如果 Git 拒绝删除，**不要立刻改成 `-D`**；先把完整输出贴给 Codex。正常工作中，分支上可能有未合并的成果，强删会丢掉这个保护。
+
+3. 移除这次误添加的 remote：
+
+   ```powershell
+   git remote remove upstream
+   ```
+
+4. 只在下面的命令确认路径正好是本仓库的 `.venv` 后，删除这次未完成的本地环境：
+
+   ```powershell
+   Get-Item -LiteralPath .venv | Select-Object FullName,CreationTime,LastWriteTime
+   Remove-Item -LiteralPath .venv -Recurse -Force
+   Test-Path -LiteralPath .venv
+   ```
+
+   最后一行应输出 `False`。删除的是可由 `uv sync` 重新生成的本地环境，不是项目代码，也不会影响远端仓库。
+
+5. 再次确认：
+
+   ```powershell
+   git status --short --branch
+   git remote -v
+   git branch --show-current
+   ```
+
+### 脑内模型
+
+```text
+仓库文件和提交历史      → Git 管
+remote 名称和分支指针    → Git 配置 / 引用管
+.venv                    → 可随时重建的本地运行环境
+```
+
+恢复时分别处理三类状态，不能因为想“回到原点”就随手运行 `git reset --hard`。
 
 ---
 
-## Task 1：先确认自己站在哪里（0:00–0:25）
+## 4. 建立 Fork 工作流（约 20 分钟）
 
-**Files:**
+### 4.1 添加并获取原作者仓库
 
-- Create: `notes/day1.md`（本文件）
-- Do not modify: `01-grpo/` 下任何训练代码
+```powershell
+git remote add upstream https://github.com/KMnO4-zx/agentic-rl-lab.git
+git fetch upstream
+git remote -v
+```
 
-- [ ] **Step 1：确认当前分支和工作区。**
+预期看到：
 
-  ```powershell
-  git branch --show-current
-  git status --short --branch
-  git log --oneline --graph --decorate -5
-  ```
+```text
+origin    https://github.com/walchwil/agentic-rl-lab.git
+upstream  https://github.com/KMnO4-zx/agentic-rl-lab.git
+```powershell
+git switch -c sprint/week1-foundation
+git status --short --branch
+```
 
-  **预期：** 当前分支是 `codex/sprint-week1-foundation`；开始工作前没有与今天无关的改动。
+预期状态类似：
 
-- [ ] **Step 2：用自己的话写下三句话。**
+```text
+## sprint/week1-foundation
+```
 
-  在本文件的“今日记录”中补全：
+### 这一小步到底保护了什么？
 
-  ```text
-  我现在在哪个分支：
-  今天 commit 后哪个标签会移动：
-  main 上的 test.py 为什么不会自动出现在当前分支：
-  ```
-
-**验收：** 不查资料也能说出：提交会推进当前分支，而不会自动推进 `main`、其他分支或远程仓库。
+`main` 是可随时回看的稳定起点；今天的笔记、后续的小实验都先落在 `sprint/week1-foundation`。如果今天做错了，我能精确地比较或删除这个分支，而不会把 `main` 弄乱。
 
 ---
 
-## Task 2：建立项目环境，不猜（0:25–1:45）
+## 6. 建立可复现 Python 环境（约 45～90 分钟）
 
-**Files:**
+### 6.1 先确认工具
 
-- Read: [pyproject.toml](/D:/agentic-rl-lab/pyproject.toml:1)
-- Read: [README.md](/D:/agentic-rl-lab/README.md:63)
-- Generated locally but ignored: `.venv/`、下载缓存
+```powershell
+uv --version
+```
 
-- [ ] **Step 1：确认工具入口。**
+记录版本号：`____________________________`
 
-  ```powershell
-  uv --version
-  ```
+### 6.2 安装锁定的项目依赖
 
-  **预期：** 输出一个 `uv` 版本号。
+```powershell
+uv sync
+```
 
-- [ ] **Step 2：同步仓库锁定的依赖。**
+成功的核心信号是命令以退出码 0 结束，并在仓库里生成 `.venv`。不要因为它下载了 `torch`、Python 或依赖包就提前中断。
 
-  ```powershell
-  uv sync
-  ```
+若失败：
 
-  **预期：** 命令成功结束；本地可出现被 `.gitignore` 忽略的 `.venv/`。项目要求 Python `>=3.13`，并把本地 Torch 指到 CPU 索引；这不等于训练只在本地 CPU 上进行，实际训练/采样由远程 PyTRIO 服务执行。
+1. 不改 `pyproject.toml`，不删 `uv.lock`，不让 AI “全部修好”。
+2. 先记下错误中最早出现的失败行和最后 20 行。
+3. 把完整错误与下面两条命令的输出发给 Codex：
 
-- [ ] **Step 3：若失败，按诊断流程而不是乱修。**
+   ```powershell
+   uv --version
+   uv python list
+   ```
 
-  先记录第一段真正的报错，然后只运行一次：
+### 6.3 验证环境真的可用
 
-  ```powershell
-  uv sync -v
-  ```
+只有 `uv sync` 成功后再运行：
 
-  在“今日记录”中分类：
+```powershell
+uv run python --version
+uv run python -c "import importlib.metadata as m; import torch, pytrio; print('torch =', torch.__version__); print('pytrio =', m.version('pytrio'))"
+git check-ignore -v .venv
+```
 
-  ```text
-  层级：操作系统 / Python 版本 / 网络或依赖源 / 包解析
-  第一个有意义的错误：
-  我的三个候选原因：
-  下一条最小诊断命令：
-  ```
+预期：前两条能输出 Python、Torch、PyTRIO 的版本；最后一条能指出 `.gitignore` 中忽略 `.venv` 的规则。
 
-  **停止线：** 没有证据时，不修改 `pyproject.toml`，不卸载 Conda，不复制网上的环境修复命令。
+### 脑内模型
 
-**验收：** `uv sync` 成功；或者你能精确说明失败在哪一层，而不是只说“环境坏了”。
+```text
+pyproject.toml  = 项目声明“需要什么”
+uv.lock         = 本次可复现地“用哪一版”
+.venv           = 本机实际安装出来、可删除重建的运行副本
+```
 
 ---
 
-## Task 3：准备远程训练，并做一次最小试跑（1:45–3:45）
+## 7. 把今天变成可审查的 Git 记录（约 35 分钟）
 
-**Files:**
+### 7.1 填写真实记录
 
-- Read: [01-grpo/start.md](/D:/agentic-rl-lab/01-grpo/start.md:1)
-- Read: [01-grpo/readme.md](/D:/agentic-rl-lab/01-grpo/readme.md:128)
-- Run: [01-grpo/01-demo-sync.py](/D:/agentic-rl-lab/01-grpo/01-demo-sync.py:712)
+回到本文件，把下面的空白补成自己的真实情况。不要写任何 token、密码或 API key。
 
-- [ ] **Step 1：只完成 PyTRIO 登录。**
+## 今日实际记录
 
-  ```powershell
-  trio login
-  ```
+### 环境
 
-  **预期：** 按 CLI 的交互式流程完成认证。不要把 token、浏览器回调 URL 或任何凭据粘贴到本笔记、终端截图或 Git 中。
+- `uv --version`：
+- `uv sync`：成功 / 失败；耗时约：
+- Python 版本：
+- Torch 版本：
+- PyTRIO 版本：
 
-  **停止线：** 如果无法认证，记录认证界面给出的错误或状态；今天仍可继续读数据流，但不要伪造环境变量或修改训练脚本。
+### Git 命令与观察
 
-- [ ] **Step 2：估算这次试跑的规模。**
+- 我确认的 `origin`：
+- 我确认的 `upstream`：
+- 我创建的分支：
+- `git status` 显示的意思：
 
-  本次参数为：`steps=1`、`batch-size=2`、`group-size=2`、`max-tokens=64`。
+### 我现在理解
 
-  ```text
-  1 个优化 step × 2 道题 × 每题 2 个 completion = 4 条 rollout
-  最多生成 4 × 64 = 256 个 completion token
-  ```
+- `working tree`：
+- `staging area`：
+- `commit`：
 
-  这不是正式实验，只是把完整链路缩小到可观察的大小。
+### 我还不理解 / 今天遇到的问题
 
-- [ ] **Step 3：运行 smoke test。**
+- 
 
-  ```powershell
-  uv run python 01-grpo/01-demo-sync.py --steps 1 --batch-size 2 --group-size 2 --max-tokens 64 --loss-fn importance_sampling --swanlab-mode disabled
-  ```
+### 7.2 故意观察三层 Git 状态
 
-  **成功时应依次看到：**
+这份文件刚被创建时是 **untracked file**。先运行：
 
-  ```text
-  Loading GSM8K dataset...
-  Creating PyTRIO clients...
-  Step  0 | reward: ... | ... | loss_mean: ...
-  Saving final LoRA weights for sampler...
-  # all done
-  ```
+```powershell
+git status
+git diff -- notes/day1.md
+```
 
-  第一次运行会自动下载 GSM8K train split；下载时间不属于“程序卡死”。
+重点观察：`git status` 会显示 `notes/` 是未跟踪内容；但第二条通常没有输出。原因不是文件不存在，而是 `git diff` 默认只比较“已被 Git 跟踪的工作区内容”和暂存区。
 
-- [ ] **Step 4：若试跑失败，只做最小定位。**
+然后把它加入暂存区，再看完整内容：
 
-  按下面顺序记录，而不是直接要求 AI “全修好”：
+```powershell
+git add notes/day1.md
+git diff --staged -- notes/day1.md
+git status
+```
 
-  ```text
-  1. 完整命令：
-  2. 第一个属于项目或依赖的 traceback 位置：
-  3. 故障层级：数据下载 / PyTRIO 认证或服务 / Python 依赖 / 项目逻辑
-  4. 我的一个假设：
-  5. 下一步只验证什么：
-  ```
+现在请再编辑本文件至少一处真实记录，然后运行：
 
-  可对 AI 使用这句提示词：
+```powershell
+git diff -- notes/day1.md
+git add -p notes/day1.md
+git diff --staged -- notes/day1.md
+git status
+```
 
-  ```text
-  解释这个报错发生在什么层级；列出 3 个最可能原因；不要修改任何文件；只给我下一条诊断命令和它能区分什么。
-  ```
+`git add -p` 会逐块问是否暂存。今天如果只有一个小块，读完后输入 `y` 即可；若不确定，输入 `q` 退出，先把屏幕内容发给 Codex。
 
-**验收：** 最好是得到一次 `Step 0` 输出；若没有，也必须留下可复现命令和精确的第一故障点。
+### 脑内模型
+
+```text
+编辑器保存的文件
+        ↓
+working tree（我正在修改的现场）
+        ↓ git add
+staging area（我挑选好、准备交卷的版本）
+        ↓ git commit
+commit（历史里不可变的一次快照）
+```
 
 ---
 
-## Task 4：追一条数据流，不逐行翻译（3:45–5:20）
+## 8. 创建今天的第一条本地 commit（约 10 分钟）
 
-**下面是学习示意，不是脚本原文：**
+仅当以下检查全部符合预期时执行：
 
-```text
-GSM8K 的一行 question / answer
-  ↓ load_gsm8k_train()
-当前 step 的 2 道题
-  ↓ pick_batch()
-prompt tokens
-  ↓ build_prompt()
-每题 2 个模型 completion，含 token / logprob
-  ↓ run_rollout_group()
-reward 与组内 advantage
-  ↓ grade_answer()
-PyTRIO Datum
-  ↓ build_grpo_datum()
-forward_backward() + optim_step()
-参数更新与终端指标
+- [ ] `git status` 只包含我能解释的 `notes/day1.md` 变动。
+- [ ] `git diff --staged -- notes/day1.md` 中没有 API key、密码或无关修改。
+- [ ] 我知道这次 commit 的目的只是记录 Day 1 的环境与 Git 学习，不包含模型代码改动。
+
+执行：
+
+```powershell
+git commit -m "docs: start day 1 engineering log"
+git status --short --branch
+git log --oneline --graph --decorate -5
 ```
 
-- [ ] **Step 1：按顺序只看七个锚点。**
-
-  | 你要回答的问题 | 从哪里开始看 |
-  | --- | --- |
-  | 数据从哪里来？ | [`load_gsm8k_train()`](/D:/agentic-rl-lab/01-grpo/01-demo-sync.py:345) |
-  | prompt 怎样构造？ | [`build_prompt()`](/D:/agentic-rl-lab/01-grpo/01-demo-sync.py:327) |
-  | 一题怎样生成一组回答？ | [`run_rollout_group()`](/D:/agentic-rl-lab/01-grpo/01-demo-sync.py:359) |
-  | 对错怎样变成 reward？ | [`grade_answer()`](/D:/agentic-rl-lab/01-grpo/01-demo-sync.py:311) |
-  | 训练数据长什么样？ | [`build_grpo_datum()`](/D:/agentic-rl-lab/01-grpo/01-demo-sync.py:415) |
-  | 主循环在哪里串起这些步骤？ | [`main()`](/D:/agentic-rl-lab/01-grpo/01-demo-sync.py:542) |
-  | 程序从哪里真正开始？ | [脚本入口](/D:/agentic-rl-lab/01-grpo/01-demo-sync.py:712) |
-
-- [ ] **Step 2：在“今日记录”中填完自己的数据流。**
-
-  ```text
-  输入样本长什么样：
-  prompt 的直接产物是什么：
-  group-size=2 在程序里意味着什么：
-  reward 由谁产出：
-  advantage 为什么不能跨题比较：
-  Datum 最终交给谁：
-  哪一句代码真正等待远程训练完成：
-  ```
-
-- [ ] **Step 3：只补一个阻塞理解的 Python 概念。**
-
-  候选仅限：`@dataclass`、类型标注、`list[...]`、`.result()`、`try/finally`。选一个今天真正卡住你的，写下：它在这个脚本中解决什么问题；不要开一门脱离项目的 Python 课程。
-
-**验收：** 你可以从“1 道 GSM8K 题”口述到“参数更新”，即使暂时说不清每个张量的精确 shape。
+预期：日志里出现这一条 commit；`git status --short --branch` 不再列出文件改动。今天先不 `git push`，明天确认分支和 commit 的关系后再决定是否推送。
 
 ---
 
-## Task 5：用一次受控的 AI Review 收束（5:20–6:30）
+## 9. Day 1 最终验收（约 10 分钟）
 
-**Files:**
+最后运行并保存关键输出：
 
-- Read: [01-demo-sync.py](/D:/agentic-rl-lab/01-grpo/01-demo-sync.py:542)
-- Modify: `notes/day1.md` 的“今日记录”部分
+```powershell
+git status --short --branch
+git remote -v
+git log --oneline --graph --decorate -5
+uv run python --version
+```
 
-- [ ] **Step 1：先由你写出 5 句结论。**
+完成后，我应能不用查资料回答：
 
-  ```text
-  这个脚本解决的问题：
-  它的外部输入：
-  它产生的关键中间数据：
-  它的训练更新发生在哪里：
-  它结束时保存或打印了什么：
-  ```
+- [ ] `git checkout main` 与 `git switch main` 在当前场景为什么都能切分支？
+- [ ] `origin`、`upstream`、`local` 分别是什么？
+- [ ] 为什么 `.venv` 不应提交？
+- [ ] 为什么未跟踪文件刚创建时，`git diff` 可能是空的？
+- [ ] `git diff` 和 `git diff --staged` 分别在比较哪两个地方？
 
-- [ ] **Step 2：再让 AI 做导航，不让 AI 代替你读。**
+## 10. 卡住时的处理协议
 
-  ```text
-  从一条 GSM8K sample 进入 01-grpo/01-demo-sync.py 开始，追踪到 parameter update 为止。
-  不要泛泛解释 GRPO；给我具体函数名、文件名和调用顺序。
-  先不要建议修改任何代码。
-  ```
-
-- [ ] **Step 3：比对并标记一处“我原来理解错了”的地方。**
-
-  这一步比“全答对”更重要：它是你形成工程判断的证据。
-
-**验收：** 你保留自己的结论，再用 AI 校正，而不是把 AI 的回答原样当作理解。
+1. 停在报错处，不连续尝试多个“看起来可能有用”的命令。
+2. 先回答：这是 Git、Python、依赖、网络，还是项目代码层的问题？
+3. 贴出命令、完整报错、我原本预期看到什么。
+4. 让 Codex 只给一个下一步诊断命令；我自己执行后再回来。
 
 ---
 
-## Task 6：记录、检查 diff、只提交本笔记（6:30–7:00）
-
-- [ ] **Step 1：补完本文件末尾的“今日记录”。**
-
-- [ ] **Step 2：检查本次改动的边界。**
-
-  ```powershell
-  git status --short
-  git diff --check
-  git diff -- notes/day1.md
-  ```
-
-  **预期：** 只有 `notes/day1.md`；`git diff --check` 没有空白符错误。
-
-- [ ] **Step 3：只暂存这一份笔记，再检查一次。**
-
-  ```powershell
-  git add notes/day1.md
-  git diff --staged --check
-  git diff --staged -- notes/day1.md
-  ```
-
-- [ ] **Step 4：提交并观察 Git 树。**
-
-  ```powershell
-  git commit -m "docs: record Day 1 GRPO foundation work"
-  git log --oneline --graph --decorate -5
-  ```
-
-  **预期脑内模型：** 这是今天的第二次提交：它记录你填入的真实执行证据。新 commit 出现在最上方；`HEAD -> codex/sprint-week1-foundation` 跟着移动；`main`、`origin/main`、`upstream/main` 仍停在它们原本的位置。
-
----
-
-## 今日记录（工作时由你补充）
-
-### 1. 工作区
+## Day 1 收束脑内模型
 
 ```text
-我现在在哪个分支：
-今天 commit 后哪个标签会移动：
-main 上的 test.py 为什么不会自动出现在当前分支：
+个人 fork / 原作者仓库
+        ↓
+安全分支
+        ↓
+可重建的 .venv
+        ↓
+真实记录
+        ↓
+审查 diff
+        ↓
+本地 commit
 ```
 
-### 2. 环境与试跑证据
-
-```text
-uv sync：成功 / 失败
-若失败，层级与第一条有意义报错：
-trio login：成功 / 阻塞在：
-smoke test 完整命令：
-smoke test 最终结果：
-运行耗时或我观察到的下载阶段：
-```
-
-### 3. 我自己的数据流解释
-
-```text
-输入样本长什么样：
-prompt 的直接产物是什么：
-group-size=2 在程序里意味着什么：
-reward 由谁产出：
-advantage 为什么不能跨题比较：
-Datum 最终交给谁：
-真正等待远程训练完成的代码：
-```
-
-### 4. 今天只补的一个知识点
-
-```text
-概念：
-它在这个脚本中的作用：
-```
-
-### 5. 复盘
-
-```text
-我原来理解错的一件事：
-我今天得到的最重要证据：
-明天最值得继续追的一处：
-```
-
-## Day 1 完成定义
-
-- [ ] 当前分支和远程分支的关系说得清。
-- [ ] `uv sync` 成功，或有可复现、可分类的失败记录。
-- [ ] 知道 PyTRIO 认证是否已就绪，且没有把凭据写入仓库。
-- [ ] 最小 GRPO 试跑到达 `Step 0`，或精确定位首个阻塞层。
-- [ ] 能从 GSM8K 样本口述到 `optim_step()` 的顶层链路。
-- [ ] 只提交 `notes/day1.md`，并能解释 Git 树中新 commit 为什么只推进当前分支。
-
-## 今天结束后发给 reviewer 的最小材料
-
-```text
-1. git status --short --branch
-2. git log --oneline --graph --decorate -5
-3. smoke test 的首段输出与末段输出，或第一段 traceback
-4. 上面“我自己的数据流解释”的七个答案
-5. 你最卡的一处，不超过三句话
-```
+明天再把这套工作流接到第一条真实 GRPO 数据流上：GSM8K question → rollout → reward → advantage → update。

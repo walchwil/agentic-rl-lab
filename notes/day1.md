@@ -203,9 +203,18 @@ git checkout 977c9c1cd287d10d4988d7a6a67f997aa1ab3c63
 - Run: [01-grpo/01-demo-sync.py](/D:/agentic-rl-lab/01-grpo/01-demo-sync.py:712)
 
 - [ ] **Step 1：只完成 PyTRIO 登录。**
+  裸 trio
+→ PowerShell 只去系统 PATH 找
+→ 找不到 .venv\Scripts\trio.exe
+→ 报错
+
+uv run trio login
+→ uv 临时进入本项目 .venv
+→ 找到 trio.exe
+→ 执行登录
 
   ```powershell
-  trio login
+  uv run trio login
   ```
 
   **预期：** 按 CLI 的交互式流程完成认证。不要把 token、浏览器回调 URL 或任何凭据粘贴到本笔记、终端截图或 Git 中。

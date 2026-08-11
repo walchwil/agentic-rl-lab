@@ -17,12 +17,12 @@ swanlab login
 当前依赖版本下，直接使用同步入口：
 
 ```bash
-uv run python 01-grpo/01-demo-sync.py \
-    --steps 10 \
-    --batch-size 4 \
-    --group-size 8 \
-    --max-tokens 512 \
-    --loss-fn importance_sampling \
+uv run python 01-grpo/01-demo-sync.py `
+    --steps 10 `
+    --batch-size 4 `
+    --group-size 8 `
+    --max-tokens 512 `
+    --loss-fn importance_sampling `
     --swanlab-mode online
 ```
 
